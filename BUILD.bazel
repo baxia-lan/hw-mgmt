@@ -1,37 +1,31 @@
-"""
-Mellanox HW management — BUILD.bazel added on claude branch.
+"""Mellanox HW management — BUILD.bazel added on claude branch.
 
 Migration status: Phase 1 Bazel migration.
-Build type: Platform-specific (kernel modules, device drivers, vendor code)
+Build type: Make + debian packaging + Python scripts
 
-Platform modules are built inside the sonic-slave toolchain container.
-The final artifacts are included in platform-specific ONIE images via
-//platform/<name>:BUILD.bazel.
+Mellanox hw-mgmt contains kernel modules, systemd services, and Python
+scripts for hardware management on Mellanox switches. The build produces
+.deb packages via dpkg-buildpackage.
 """
+
+load("//rules/bazel/deb:deb.bzl", "deb_package_set")
 
 package(default_visibility = ["//visibility:public"])
 
 filegroup(
-    name = "platform_srcs",
+    name = "all_srcs",
     srcs = glob(
         ["**/*"],
         exclude = [".git/**", "build/**", "*.o", "*.ko"],
     ),
 )
 
-genrule(
-    name = "hw-mgmt_modules",
-    srcs = [":platform_srcs"],
-    outs = ["hw-mgmt_modules.tar.gz"],
-    cmd = """
-set -euo pipefail
-# Platform-specific build. Override with platform Makefile conventions.
-SOURCE_DATE_EPOCH=0 make -C $$(dirname $(location :platform_srcs)) -j$$(nproc) 2>&1
-find $(RULEDIR) -name '*.ko' -o -name '*.deb' | \
-  tar -czf $(OUTS) -T - 2>/dev/null || true
-""",
-    tags = ["manual", "platform"],
-    execution_requirements = {"requires-network": "0"},
+deb_package_set(
+    name = "hw_mgmt_debs",
+    srcs = [":all_srcs"],
+    debian_dir = "debian",
+    version = "$(PKG_VERSION)",
+    declared_outputs = ["hw-management.deb"],
     visibility = ["//visibility:public"],
 )
 
